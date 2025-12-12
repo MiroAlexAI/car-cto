@@ -2,6 +2,7 @@
 const inputs = {
     // Old Car
     oldPrice: document.getElementById('old-price'),
+    savings: document.getElementById('savings'),
     oldConsumption: document.getElementById('old-consumption'),
     oldMaintenance: document.getElementById('old-maintenance'),
     oldTax: document.getElementById('old-tax'),
@@ -23,11 +24,15 @@ const inputs = {
     newConsumption: document.getElementById('new-consumption'),
     newMaintenance: document.getElementById('new-maintenance'),
     newTax: document.getElementById('new-tax'),
+
+    // Eco
+    capitalRate: document.getElementById('capital-rate'),
 };
 
 const displays = {
     // Value Displays
     oldPrice: document.getElementById('old-price-val'),
+    savings: document.getElementById('savings-val'),
     oldCons: document.getElementById('old-consumption-val'),
     oldMaint: document.getElementById('old-maintenance-val'),
     oldTax: document.getElementById('old-tax-val'),
@@ -47,6 +52,7 @@ const displays = {
 
     oldDepr: document.getElementById('old-depr-val'),
     newDepr: document.getElementById('new-depr-val'),
+    capitalRate: document.getElementById('capital-rate-val'),
 
     // Results in UI
     resYears: document.getElementById('res-years'),
@@ -100,6 +106,7 @@ function updateDisplays() {
     };
 
     if (displays.oldPrice) displays.oldPrice.textContent = fmtMillions(inputs.oldPrice.value);
+    if (displays.savings) displays.savings.textContent = fmtCurrency(inputs.savings.value);
     if (displays.oldCons) displays.oldCons.textContent = inputs.oldConsumption.value;
     if (displays.oldMaint) displays.oldMaint.textContent = fmtCurrency(inputs.oldMaintenance.value);
     if (displays.oldTax) displays.oldTax.textContent = fmtCurrency(inputs.oldTax.value);
@@ -119,6 +126,7 @@ function updateDisplays() {
 
     if (displays.oldDepr) displays.oldDepr.textContent = inputs.oldDepr.value + '%';
     if (displays.newDepr) displays.newDepr.textContent = inputs.newDepr.value + '%';
+    if (displays.capitalRate) displays.capitalRate.textContent = inputs.capitalRate.value + '%';
 
     if (displays.resYears) displays.resYears.textContent = inputs.years.value;
 }
@@ -161,6 +169,7 @@ function getInputs() {
         oldMaint: parseInt(inputs.oldMaintenance.value),
         oldTax: parseInt(inputs.oldTax.value),
         oldPrice: parseInt(inputs.oldPrice.value),
+        savings: parseInt(inputs.savings.value),
         oldDepr: parseFloat(inputs.oldDepr.value),
         // New
         newPrice: parseInt(inputs.newPrice.value),
@@ -168,6 +177,7 @@ function getInputs() {
         newMaint: parseInt(inputs.newMaintenance.value),
         newTax: parseInt(inputs.newTax.value),
         newDepr: parseFloat(inputs.newDepr.value),
+        capitalRate: parseFloat(inputs.capitalRate.value),
     };
 }
 
@@ -185,19 +195,20 @@ function calculate() {
     displays.newTotalCost.textContent = formatMoney(result.finalNew);
 
     // Upgrade Cost (Cash required)
-    const cashRequired = data.newPrice - data.oldPrice;
+    // NewPrice - (OldPrice + Savings)
+    const cashRequired = data.newPrice - (data.oldPrice + data.savings);
     displays.upgradeCost.textContent = formatMoney(cashRequired);
 
     displays.totalDiff.textContent = formatMoney(Math.abs(result.diff));
 
     if (result.diff < 0) {
         displays.totalDiff.style.color = '#4ade80';
-        displays.recommendation.textContent = "✅ Выгодно (Меньше потери стоимости)";
+        displays.recommendation.textContent = "✅ Выгодно";
         displays.recommendation.style.color = "#4ade80";
         displays.recommendation.style.backgroundColor = "rgba(74, 222, 128, 0.2)";
     } else {
         displays.totalDiff.style.color = '#f87171';
-        displays.recommendation.textContent = "❌ Невыгодно (Большая амортизация)";
+        displays.recommendation.textContent = "❌ Невыгодно";
         displays.recommendation.style.color = "#f87171";
         displays.recommendation.style.backgroundColor = "rgba(248, 113, 113, 0.2)";
     }
@@ -244,7 +255,9 @@ function optimize() {
           Пробег: ${data.mileage} км/год<br>
           Старый TCO: ${formatMoney(p.oldTCO)}<br>
           Риски: ${data.breakdownProb}% (Ремонт ${formatMoney(data.repairPrice)})<br>
-          Амортизация: Старый ${data.oldDepr}%, Новый ${data.newDepr}%
+          Риски: ${data.breakdownProb}% (Ремонт ${formatMoney(data.repairPrice)})<br>
+          Амортизация: Старый ${data.oldDepr}%, Новый ${data.newDepr}%<br>
+          Упущенная выгода (ставка): ${data.capitalRate}%
         </span>
     `;
 

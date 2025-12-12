@@ -49,6 +49,13 @@
                     </div>
                 </div>
                 <div class="input-group">
+                    <label>Накопления (+) / Долг (-)</label>
+                    <div class="range-row">
+                        <input type="range" id="savings" min="-1000000" max="2000000" step="50000" value="0">
+                        <span id="savings-val">0 ₽</span>
+                    </div>
+                </div>
+                <div class="input-group">
                     <label>Расход (л/100км)</label>
                     <div class="range-row">
                         <input type="range" id="old-consumption" min="4" max="25" value="10" step="0.5">
@@ -168,9 +175,21 @@
                         <span id="new-depr-val">15%</span>
                     </div>
                 </div>
+                <div class="input-group">
+                    <label style="cursor: help; text-decoration: underline dotted;"
+                        title="Процентная ставка по вкладам. Показывает, сколько вы теряете денег, 'заморозив' их в стоимости машины, вместо того чтобы положить на счет в банке.">Доходность
+                        вклада (% годовых)</label>
+                    <div class="range-row">
+                        <input type="range" id="capital-rate" min="0" max="30" step="1" value="15">
+                        <span id="capital-rate-val">15%</span>
+                    </div>
+                </div>
 
                 <div class="opt-section">
-                    <button id="optimize-btn" class="btn-primary">Авто-подбор</button>
+                    <button id="optimize-btn" class="btn-primary" title="Подбирает цену покупки нового авто, при которой совокупные потери (TCO) сравняются с текущим авто.
+Учитывает: амортизацию, переплату за капремонты (старый авто) и упущенную выгоду от заморозки средств (ставка по вкладам).
+Корректно работает даже при 0% ставке или амортизации.">Авто-подбор</button>
+
 
                     <div id="optimization-result" class="opt-result hidden">
                         <div class="opt-label">Макс. цена покупки:</div>
@@ -199,11 +218,11 @@
 
             <div class="stats-footer">
                 <div class="mini-stat">
-                    <span>Потери (Старый)</span>
+                    <span>Сумма затрат (Старый)</span>
                     <strong id="old-total-cost">0</strong>
                 </div>
                 <div class="mini-stat">
-                    <span>Потери (Новый)</span>
+                    <span>Сумма затрат (Новый)</span>
                     <strong id="new-total-cost">0</strong>
                 </div>
                 <div class="mini-stat">
