@@ -18,7 +18,6 @@ const TCOLogic = {
             repairPrice,
             currentMileage,
             overhaulInterval,
-            capitalRate, // % Annual Interest
             // Old Car
             oldCons,
             oldMaint,
@@ -45,14 +44,15 @@ const TCOLogic = {
 
         const oldDeprRate = oldDepr / 100;
         const newDeprRate = newDepr / 100;
-        const capRate = (capitalRate || 0) / 100; // Capital Rate factor
 
         // Arrays for Chart
         const labels = [];
-        const oldData = [];
-        const newData = [];
-        const oldDeprData = [];
-        const newDeprData = [];
+        const oldData = []; // Cumulative
+        const newData = []; // Cumulative
+        const oldDeprData = []; // Asset Value
+        const newDeprData = []; // Asset Value
+        const oldAnnualData = []; // Annual Bar
+        const newAnnualData = []; // Annual Bar
 
         let cumOldSpend = 0;
         let cumNewSpend = 0;
@@ -67,7 +67,7 @@ const TCOLogic = {
             if (i === 0) {
                 // Year 0: Initial Start.
                 // Switching Cost is the immediate cash flow impact: New Price - (Old Price + Savings).
-                const switchCost = newPrice - (oldPrice + savings);
+                const switchCost = newPrice - (oldPrice + (savings || 0));
 
                 oldData.push(0);
                 newData.push(switchCost);
@@ -75,6 +75,10 @@ const TCOLogic = {
                 // Asset Values
                 oldDeprData.push(oldPrice);
                 newDeprData.push(newPrice);
+
+                // Annual Data (Year 0 impact)
+                oldAnnualData.push(0);
+                newAnnualData.push(switchCost);
             } else {
                 // 1. Overhaul Logic (Old Car)
                 const prevOdo = oldOdometer;
@@ -87,34 +91,34 @@ const TCOLogic = {
                     overhaulCount += repairsTriggered;
                 }
 
-                // 2. Capital Opportunity Cost (Lost Interest)
-                // Calculated on the value TIED UP in the car at the start of the year.
-                // For Old Car: currentOldVal
-                // For New Car: currentNewVal
-                const oldCapCost = currentOldVal * capRate;
-                const newCapCost = currentNewVal * capRate;
-
-                // 3. Depreciation
+                // 2. Depreciation
                 const oldDeprLoss = currentOldVal * oldDeprRate;
                 currentOldVal -= oldDeprLoss;
 
                 const newDeprLoss = currentNewVal * newDeprRate;
                 currentNewVal -= newDeprLoss;
 
-                // 4. Cumulative Spending Update
-                cumOldSpend += oldOpBase + thisYearOverhaulCost + oldCapCost;
-                cumNewSpend += newOpBase + newCapCost;
+                // 3. Cumulative Spending Update
+                cumOldSpend += oldOpBase + thisYearOverhaulCost;
+                cumNewSpend += newOpBase;
 
-                // 5. Total Loss Calculation
-                // Loss = Cumulative Cash Out (Expenses + Capital) + Loss of Asset Value (Depreciation)
+                // 4. Annual Loss Calculation (for Bars)
+                const annualOldLoss = oldOpBase + thisYearOverhaulCost + oldDeprLoss;
+                const annualNewLoss = newOpBase + newDeprLoss;
+
+                oldAnnualData.push(annualOldLoss);
+                newAnnualData.push(annualNewLoss);
+
+                // 5. Total Loss Calculation (Cumulative)
+                // Loss = Cumulative Cash Out (Expenses) + Loss of Asset Value (Depreciation)
                 // Note: oldPrice - currentOldVal = Total Depreciation so far.
 
                 const totalOldLoss = cumOldSpend + (oldPrice - currentOldVal);
 
                 // For New: We include the initial Switch Cost in the "Spending".
                 // SwitchCost = NewPrice - (OldPrice + Savings).
-                // Total New Loss = SwitchCost + Ops/Cap Spending + Depreciation.
-                const switchCost = newPrice - (oldPrice + savings);
+                // Total New Loss = SwitchCost + Ops Spending + Depreciation.
+                const switchCost = newPrice - (oldPrice + (savings || 0));
                 const totalNewLoss = switchCost + cumNewSpend + (newPrice - currentNewVal);
 
                 oldData.push(totalOldLoss);
@@ -131,16 +135,18 @@ const TCOLogic = {
             newData,
             oldDeprData,
             newDeprData,
+            oldAnnualData,
+            newAnnualData,
             finalOld: oldData[years],
             finalNew: newData[years],
             overhaulCount,
             diff: newData[years] - oldData[years]
         };
     },
+
     /**
      * Calculates optimization recommendations
-     * @param {Object} data - Input data object
-     * @returns {Object} - Recommendation result
+     * Used for "Auto-pick" feature
      */
     optimize: function (data) {
         const {
@@ -150,25 +156,18 @@ const TCOLogic = {
             breakdownProb,
             repairPrice,
             overhaulInterval,
-            capitalRate,
             oldCons,
             oldMaint,
             oldTax,
             oldPrice,
             oldDepr,
-            newCons,
-            newMaint,
-            newTax,
-            newDepr, // %
-            newPrice
+            newDepr, // % Global setting for New Car Depreciation
+            newPrice // We use this only for the Consumption calc part (which is secondary now)
         } = data;
 
-        const capRate = (capitalRate || 0) / 100;
-
         // --- 1. Calculate Accurate Old TCO (Simulation) ---
-        // We must replicate the loop to catch Overhauls and declining Asset Value for Capital Cost
         let simOldVal = oldPrice;
-        let simOldOdo = 0; // Relative start
+        let simOldOdo = 0;
         let simOldSpend = 0;
         const oldDeprRate = oldDepr / 100;
 
@@ -183,94 +182,68 @@ const TCOLogic = {
             let overhaulCost = 0;
             if (repairs > 0) overhaulCost = repairs * repairPrice;
 
-            // Capital Cost (on Start of Year Value)
-            const capCost = simOldVal * capRate;
-
             // Depreciation
             const deprLoss = simOldVal * oldDeprRate;
             simOldVal -= deprLoss;
 
-            // Total Spend
-            simOldSpend += oldAnnualFixed + oldFuelYear + overhaulCost + capCost;
+            // Total Spend (No Capital Cost)
+            simOldSpend += oldAnnualFixed + oldFuelYear + overhaulCost;
         }
 
-        // Total Old Loss = Spend + TotalDepreciation
         const oldTotalDepr = oldPrice - simOldVal;
         const oldTCO = simOldSpend + oldTotalDepr;
 
 
-        // --- 2. Solve for Max Price (Target: NewTCO <= OldTCO) ---
-        // NewTCO = Ops + CapitalCost + Depreciation
-        // Ops is fixed (excluding Price)
-        const newOpYear = ((mileage / 100) * newCons * fuelPrice) + newMaint + newTax;
-        const newOpsTotal = newOpYear * years;
+        // --- 2. Solve for Max Price based on TARGET SPECS ---
+        // Constraint: New TCO <= Old TCO
+        // Target Specifications:
+        // Cons = OldCons * 0.9 (-10%)
+        // Maint = OldMaint * 0.85 (-15%)
+        // Tax = OldTax (Assumed same)
+        // Risks = 0 (Assumed new car reliability)
 
-        // Remaining Budget for (Capital + Depreciation)
-        const budgetForAsset = oldTCO - newOpsTotal;
+        const targetCons = oldCons * 0.9;
+        const targetMaint = oldMaint * 0.85;
+        const targetTax = oldTax;
 
-        // We need to express Capital + Depreciation as function of Price (P)
-        // DeprTotal = P * (1 - (1-r)^n)
-        // CapitalTotal approx = Sum of (Value_i * CapRate). 
-        // Value_i decays.
-        // Exact sum of Value_i over n years (geometric series):
-        // P * Sum((1-r)^k) for k=0 to n-1
-        // Let D = (1 - newDepr/100)
-        // SumVal = P * (1 - D^n) / (1 - D)
-        // TotalCapCost = SumVal * CapRate
+        // New Ops Annual
+        const targetFuelYear = (mileage / 100) * targetCons * fuelPrice;
+        const targetAnnualOps = targetFuelYear + targetMaint + targetTax;
 
-        // So: Cost_Asset = (P * DeprFactor) + (P * CapFactor * CapRate)
-        // Cost_Asset = P * (DeprFactor + CapFactor*CapRate)
+        const newOpsTotal = targetAnnualOps * years;
 
+        // Remaining Budget for Depreciation
+        // OldTCO = NewOpsTotal + NewTotalDepreciation
+        // NewTotalDepr = OldTCO - NewOpsTotal
+        const allowedDeprTotal = oldTCO - newOpsTotal;
+
+        // NewTotalDepr = Price * DeprFactor
+        // DeprFactor = 1 - (1-rate)^n
         const newDeprRate = newDepr / 100;
         const decay = 1 - newDeprRate;
-        const deprFactor = 1 - Math.pow(decay, years); // % of Price lost
-
-        // Geometric sum for Capital Cost base
-        let geomSum = 0;
-        if (newDeprRate === 0) {
-            geomSum = years;
-        } else {
-            geomSum = (1 - Math.pow(decay, years)) / (1 - decay);
-        }
-        const capitalFactor = geomSum * capRate;
-
-        // Solve: P * (deprFactor + capitalFactor) = budgetForAsset
-        // P = budgetForAsset / (deprFactor + capitalFactor)
+        const deprFactor = 1 - Math.pow(decay, years);
 
         let recPrice = 0;
-        if (budgetForAsset > 0) {
-            recPrice = budgetForAsset / (deprFactor + capitalFactor);
+        if (allowedDeprTotal > 0 && deprFactor > 0) {
+            recPrice = allowedDeprTotal / deprFactor;
         }
 
-        // --- 3. Solve for Target Consumption (recCons) ---
-        // Fixed Price (User Input)
-        // NewTCO = (Fuel + FixedMaint) * Years + FixedDepr + FixedCapCost
-
-        // Calculate costs for the specific New Price entered by user
-        const fixedNewDeprTotal = newPrice * deprFactor;
-        const fixedNewCapTotal = newPrice * capitalFactor;
-        const fixedMaintTotal = (newMaint + newTax) * years;
-
-        const maxFuelTotal = oldTCO - fixedMaintTotal - fixedNewDeprTotal - fixedNewCapTotal;
-
-        let recCons = 0;
-        if (maxFuelTotal > 0) {
-            const maxFuelYear = maxFuelTotal / years;
-            // FuelCost = (Mileage/100) * Cons * FuelPrice
-            // Cons = (FuelCost * 100) / (Mileage * FuelPrice)
-            recCons = (maxFuelYear * 100) / (mileage * fuelPrice);
-        }
+        // --- 3. Recommendation Text Data ---
+        // We pass back the simulated improvements
 
         return {
             recPrice,
-            recCons,
+            // We return 0 for recCons because we enforced a strict target (Old - 10%)
+            // but we can return the TARGET Cons to display it.
+            recCons: targetCons,
             params: {
                 years,
                 mileage,
                 oldTCO,
-                oldOpYear: oldAnnualFixed + oldFuelYear, // Average ref
-                newOpYear,
-                deprFactor
+                oldOpYear: oldAnnualFixed + oldFuelYear,
+                newOpYear: targetAnnualOps,
+                deprFactor,
+                targetMaint
             }
         };
     }

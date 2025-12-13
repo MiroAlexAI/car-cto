@@ -297,3 +297,73 @@ input[type="range"]::-webkit-slider-thumb {
     font-weight: 600;
     color: var(--text-primary);
 }
+
+/* Mobile/Tablet Responsiveness */
+@media (max-width: 1100px) {
+    body {
+        height: auto;
+        overflow-y: auto;
+    }
+
+    .dashboard-wrapper {
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: auto auto; /* Header + Content */
+        min-height: 100vh;
+        height: auto;
+        overflow: visible;
+    }
+
+    /* Header spans full width */
+    .header {
+        grid-column: 1 / -1;
+    }
+
+    /* Results take full width at bottom for generic tablet */
+    .col-results {
+        grid-column: 1 / -1;
+        min-height: 500px;
+    }
+}
+
+@media (max-width: 768px) {
+    .dashboard-wrapper {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .header {
+        padding: 0 1rem;
+        min-height: 60px;
+    }
+
+    .panel {
+        padding: 1rem;
+        /* Remove fixed height scrolling behavior on mobile */
+        height: auto;
+        overflow: visible;
+    }
+
+    .scroll-area {
+        overflow: visible;
+    }
+
+    /* Make stats footer stack on very small screens */
+    .stats-footer {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+
+    .diff-value {
+        font-size: 2rem;
+    }
+
+    .chart-wrapper {
+        min-height: 250px;
+    }
+    
+    /* Optimize buttons for touch */
+    input[type="range"]::-webkit-slider-thumb {
+        width: 20px;
+        height: 20px;
+    }
+}

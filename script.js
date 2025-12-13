@@ -24,9 +24,6 @@ const inputs = {
     newConsumption: document.getElementById('new-consumption'),
     newMaintenance: document.getElementById('new-maintenance'),
     newTax: document.getElementById('new-tax'),
-
-    // Eco
-    capitalRate: document.getElementById('capital-rate'),
 };
 
 const displays = {
@@ -52,7 +49,6 @@ const displays = {
 
     oldDepr: document.getElementById('old-depr-val'),
     newDepr: document.getElementById('new-depr-val'),
-    capitalRate: document.getElementById('capital-rate-val'),
 
     // Results in UI
     resYears: document.getElementById('res-years'),
@@ -126,7 +122,6 @@ function updateDisplays() {
 
     if (displays.oldDepr) displays.oldDepr.textContent = inputs.oldDepr.value + '%';
     if (displays.newDepr) displays.newDepr.textContent = inputs.newDepr.value + '%';
-    if (displays.capitalRate) displays.capitalRate.textContent = inputs.capitalRate.value + '%';
 
     if (displays.resYears) displays.resYears.textContent = inputs.years.value;
 }
@@ -177,7 +172,6 @@ function getInputs() {
         newMaint: parseInt(inputs.newMaintenance.value),
         newTax: parseInt(inputs.newTax.value),
         newDepr: parseFloat(inputs.newDepr.value),
-        capitalRate: parseFloat(inputs.capitalRate.value),
     };
 }
 
@@ -248,20 +242,17 @@ function optimize() {
     }
 
     // Concise Summary parameters
-    const p = res.params;
     const summaryHtml = `
         <span style="font-size:0.85em; color:var(--text-secondary); display:block; margin-top:0.5rem; border-top:1px solid #dfe7ef; padding-top:0.5rem">
-          <strong>Учтено (${years} лет):</strong><br>
-          Пробег: ${data.mileage} км/год<br>
-          Старый TCO: ${formatMoney(p.oldTCO)}<br>
-          Риски: ${data.breakdownProb}% (Ремонт ${formatMoney(data.repairPrice)})<br>
-          Риски: ${data.breakdownProb}% (Ремонт ${formatMoney(data.repairPrice)})<br>
-          Амортизация: Старый ${data.oldDepr}%, Новый ${data.newDepr}%<br>
-          Упущенная выгода (ставка): ${data.capitalRate}%
+          <strong>Условия "Идеального Нового":</strong><br>
+          • Риски поломок: 0%<br>
+          • Расход топлива: ${p.newOpYear ? (inputs.oldConsumption.value * 0.9).toFixed(1) : '-'} л/100км (-10%)<br>
+          • Обслуживание: -15% от старого<br>
+          • Амортизация: ${inputs.newDepr.value}% в год
         </span>
     `;
 
-    displays.optText.innerHTML = `Чтобы выйти в ноль за ${years} лет:` + summaryHtml;
+    displays.optText.innerHTML = `Если новый авто будет надежнее и экономичнее:` + summaryHtml;
 
     // Scroll to it
     displays.optResult.scrollIntoView({ behavior: 'smooth' });
@@ -269,7 +260,7 @@ function optimize() {
 
 function updateChart(result) {
     const ctx = document.getElementById('costChart').getContext('2d');
-    const { labels, oldData, newData, oldDeprData, newDeprData, finalOld, finalNew } = result;
+    const { labels, oldData, newData, oldDeprData, newDeprData, finalOld, finalNew, oldAnnualData, newAnnualData } = result;
 
     if (chart) {
         chart.destroy();
@@ -286,9 +277,6 @@ function updateChart(result) {
     const diffVal = finalNew - finalOld;
     const diffLabel = `Разница: ${formatMoney(diffVal)} ${diffVal > 0 ? '(Дороже)' : '(Дешевле)'}`;
 
-    // We add difference to the chart title or subtitle if possible, or append to legend
-    // Chart.js 3+ supports subtitles. Let's try adding it to title first line.
-
     chart = new Chart(ctx, {
         type: 'line',
         data: {
@@ -303,7 +291,8 @@ function updateChart(result) {
                     pointRadius: 0,
                     pointHoverRadius: 4,
                     tension: 0.4,
-                    fill: true
+                    fill: true,
+                    yAxisID: 'y'
                 },
                 {
                     label: newLabel,
@@ -314,7 +303,8 @@ function updateChart(result) {
                     pointRadius: 0,
                     pointHoverRadius: 4,
                     tension: 0.4,
-                    fill: true
+                    fill: true,
+                    yAxisID: 'y'
                 },
                 {
                     label: 'Старый (Остаточная стоимость)',
@@ -325,7 +315,8 @@ function updateChart(result) {
                     borderWidth: 1.5,
                     pointRadius: 0,
                     tension: 0.4,
-                    fill: false
+                    fill: false,
+                    yAxisID: 'y'
                 },
                 {
                     label: 'Новый (Остаточная стоимость)',
@@ -336,7 +327,27 @@ function updateChart(result) {
                     borderWidth: 1.5,
                     pointRadius: 0,
                     tension: 0.4,
-                    fill: false
+                    fill: false,
+                    yAxisID: 'y'
+                },
+                // Bar Charts for Annual Costs
+                {
+                    type: 'bar',
+                    label: 'Старый (Расход/год)',
+                    data: oldAnnualData,
+                    backgroundColor: 'rgba(239, 68, 68, 0.3)',
+                    borderColor: 'rgba(239, 68, 68, 0.5)',
+                    borderWidth: 1,
+                    yAxisID: 'y1'
+                },
+                {
+                    type: 'bar',
+                    label: 'Новый (Расход/год)',
+                    data: newAnnualData,
+                    backgroundColor: 'rgba(14, 165, 233, 0.3)',
+                    borderColor: 'rgba(14, 165, 233, 0.5)',
+                    borderWidth: 1,
+                    yAxisID: 'y1'
                 }
             ]
         },
@@ -372,16 +383,13 @@ function updateChart(result) {
                     bodyColor: '#f8fafc',
                     padding: 10,
                     cornerRadius: 4,
-                    displayColors: false,
+                    // displayColors: false, // Turn on to see bar vs line colors
                     callbacks: {
                         label: function (context) {
                             let label = context.dataset.label || '';
-                            // Remove totals from legend label for cleaner tooltip if needed, but keeping it is fine.
-                            // Simplified label for tooltip to avoid clutter?
                             if (label.includes('(')) {
                                 label = label.split('(')[0].trim();
                             }
-
                             if (label) {
                                 label += ': ';
                             }
@@ -395,12 +403,29 @@ function updateChart(result) {
             },
             scales: {
                 y: {
+                    type: 'linear',
+                    display: true,
+                    position: 'left',
                     title: {
                         display: true,
-                        text: 'Затраты накопительно (Руб)',
+                        text: 'Накопительно (Руб)',
                         font: { size: 10 }
                     },
                     grid: { color: '#e2e8f0', drawBorder: false },
+                    ticks: { color: '#94a3b8', font: { family: 'Inter', size: 10 } }
+                },
+                y1: {
+                    type: 'linear',
+                    display: true,
+                    position: 'right',
+                    title: {
+                        display: true,
+                        text: 'Затраты за год (Руб)',
+                        font: { size: 10 }
+                    },
+                    grid: {
+                        drawOnChartArea: false // only want the grid lines for one axis to show up
+                    },
                     ticks: { color: '#94a3b8', font: { family: 'Inter', size: 10 } }
                 },
                 x: {

@@ -175,20 +175,13 @@
                         <span id="new-depr-val">15%</span>
                     </div>
                 </div>
-                <div class="input-group">
-                    <label style="cursor: help; text-decoration: underline dotted;"
-                        title="Процентная ставка по вкладам. Показывает, сколько вы теряете денег, 'заморозив' их в стоимости машины, вместо того чтобы положить на счет в банке.">Доходность
-                        вклада (% годовых)</label>
-                    <div class="range-row">
-                        <input type="range" id="capital-rate" min="0" max="30" step="1" value="15">
-                        <span id="capital-rate-val">15%</span>
-                    </div>
-                </div>
 
                 <div class="opt-section">
                     <button id="optimize-btn" class="btn-primary" title="Подбирает цену покупки нового авто, при которой совокупные потери (TCO) сравняются с текущим авто.
-Учитывает: амортизацию, переплату за капремонты (старый авто) и упущенную выгоду от заморозки средств (ставка по вкладам).
-Корректно работает даже при 0% ставке или амортизации.">Авто-подбор</button>
+Алгоритм предполагает покупку более совершенного авто:
+- Расход топлива ниже на 10%
+- Стоимость ТО ниже на 15%
+- Отсутствие внеплановых ремонтов">Авто-подбор</button>
 
 
                     <div id="optimization-result" class="opt-result hidden">
