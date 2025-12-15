@@ -15,6 +15,9 @@ const inputs = {
     overhaulInterval: document.getElementById('overhaul-interval'),
 
     // Common
+    riskGrowth: document.getElementById('risk-growth'),
+    riskMileage: document.getElementById('risk-mileage'),
+    currentMileage: document.getElementById('current-mileage'),
     mileage: document.getElementById('mileage'),
     fuelPrice: document.getElementById('fuel-price'),
     years: document.getElementById('years'),
@@ -91,6 +94,14 @@ function init() {
         optimizeBtn.addEventListener('click', optimize);
     }
 
+    // Specific event listeners for elements that trigger calculate on 'change' or need special handling
+    if (inputs.riskGrowth) {
+        inputs.riskGrowth.addEventListener('change', calculate);
+    }
+    if (inputs.riskMileage) {
+        inputs.riskMileage.addEventListener('change', calculate);
+    }
+
     // Initial calcs
     updateDisplays();
     calculate();
@@ -163,6 +174,8 @@ function getInputs() {
         mileage,
         fuelPrice,
         breakdownProb: parseInt(inputs.breakdownProb.value),
+        riskGrowth: inputs.riskGrowth.checked,
+        riskMileage: inputs.riskMileage.checked,
         repairPrice: parseInt(inputs.repairCost.value),
         currentMileage: startOdometer,
         overhaulInterval,
@@ -281,10 +294,10 @@ function updateChart(result) {
     }
 
     // Prepare legend strings with Totals
-    const oldLabel = `Старый (Всего: ${formatMoney(finalOld)})`;
-    const newLabel = `Новый (Всего: ${formatMoney(finalNew)})`;
+    const oldLabel = `Старый (TCO Накопительно: ${formatMoney(finalOld)})`;
+    const newLabel = `Новый (TCO Накопительно: ${formatMoney(finalNew)})`;
     const diffVal = finalNew - finalOld;
-    const diffLabel = `Разница: ${formatMoney(diffVal)} ${diffVal > 0 ? '(Дороже)' : '(Дешевле)'}`;
+    const diffLabel = `Разница TCO: ${formatMoney(diffVal)} ${diffVal > 0 ? '(Дороже)' : '(Дешевле)'}`;
 
     chart = new Chart(ctx, {
         type: 'line',
@@ -342,7 +355,7 @@ function updateChart(result) {
                 // Bar Charts for Annual Costs
                 {
                     type: 'bar',
-                    label: 'Старый (Расход/год)',
+                    label: 'Старый (Затраты в год)',
                     data: oldAnnualData,
                     backgroundColor: 'rgba(239, 68, 68, 0.3)',
                     borderColor: 'rgba(239, 68, 68, 0.5)',
@@ -351,7 +364,7 @@ function updateChart(result) {
                 },
                 {
                     type: 'bar',
-                    label: 'Новый (Расход/год)',
+                    label: 'Новый (Затраты в год)',
                     data: newAnnualData,
                     backgroundColor: 'rgba(14, 165, 233, 0.3)',
                     borderColor: 'rgba(14, 165, 233, 0.5)',
@@ -382,8 +395,8 @@ function updateChart(result) {
                     labels: {
                         color: '#64748b',
                         font: { family: 'Inter', size: 11 },
-                        usePointStyle: true,
-                        boxWidth: 6
+                        usePointStyle: false, // Changed to false to show line styles
+                        boxWidth: 20 // Wider box to show dashes
                     }
                 },
                 tooltip: {

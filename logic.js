@@ -15,6 +15,8 @@ const TCOLogic = {
             mileage,
             fuelPrice,
             breakdownProb, // %
+            riskGrowth, // boolean
+            riskMileage, // boolean
             repairPrice,
             currentMileage,
             overhaulInterval,
@@ -42,10 +44,11 @@ const TCOLogic = {
         // Base Annual Costs (Year 1 Start Nominal)
         const oldFuelBase = (mileage / 100) * oldCons * fuelPrice;
         const newFuelBase = (mileage / 100) * newCons * fuelPrice;
-        const riskBase = (breakdownProb / 100) * repairPrice;
 
-        // OpEx Base (Nominal Year 0 terms)
-        const oldOpBase = oldFuelBase + oldMaint + oldTax + riskBase;
+        // Note: Risk is now dynamic inside the loop
+
+        // OpEx Base without Risk (Nominal Year 0 terms)
+        const oldOpBaseNoRisk = oldFuelBase + oldMaint + oldTax;
         const newOpBase = newFuelBase + newMaint + newTax;
 
         const oldDeprRate = oldDepr / 100;
@@ -98,7 +101,25 @@ const TCOLogic = {
                 const opExInflator = Math.pow(1 + inflRate, i - 1);
                 const discFactor = Math.pow(1 + discRate, i);
 
-                // 1. Overhaul (Old Car)
+                // 1. Dynamic Risk
+                let currentRiskProb = breakdownProb;
+
+                // Age Growth
+                if (riskGrowth) {
+                    currentRiskProb = currentRiskProb * Math.pow(1.5, i - 1);
+                }
+
+                // Mileage Growth
+                if (riskMileage) {
+                    const mileageFactor = 1 + 0.2 * (oldOdometer / 100000);
+                    currentRiskProb = currentRiskProb * mileageFactor;
+                }
+
+                if (currentRiskProb > 100) currentRiskProb = 100;
+
+                const annualRiskCost = (currentRiskProb / 100) * repairPrice * opExInflator;
+
+                // 2. Overhaul (Old Car)
                 const prevOdo = oldOdometer;
                 oldOdometer += mileage;
                 const repairsTriggered = Math.floor(oldOdometer / overhaulInterval) - Math.floor(prevOdo / overhaulInterval);
@@ -109,24 +130,23 @@ const TCOLogic = {
                     overhaulCount += repairsTriggered;
                 }
 
-                // 2. OpEx Nominal (Fuel, Maint, Tax, Risk) + Overhaul
-                // Note: We do NOT add Depreciation here for TCO sum.
-                const nominalOldOpEx = (oldOpBase * opExInflator) + nominalOverhaulCost;
+                // 3. OpEx Nominal (Fuel, Maint, Tax) + Risk + Overhaul
+                const nominalOldOpEx = (oldOpBaseNoRisk * opExInflator) + annualRiskCost + nominalOverhaulCost;
                 const nominalNewOpEx = (newOpBase * opExInflator);
 
-                // 3. Asset Value Updates (for Final Calculation)
+                // 4. Asset Value Updates (for Final Calculation)
                 currentOldVal = currentOldVal * (1 - oldDeprRate);
                 currentNewVal = currentNewVal * (1 - newDeprRate);
 
-                // 4. PV of OpEx
+                // 5. PV of OpEx
                 const pvOldOpEx = nominalOldOpEx / discFactor;
                 const pvNewOpEx = nominalNewOpEx / discFactor;
 
-                // 5. Update Cumulative (OpEx Only)
+                // 6. Update Cumulative (OpEx Only)
                 cumOldPV += pvOldOpEx;
                 cumNewPV += pvNewOpEx;
 
-                // 6. Calculate "TCO if sold this year" for the Chart
+                // 7. Calculate "TCO if sold this year" for the Chart
                 // We add the PV of the depreciation realized if we sell at year i.
                 // TermDepr = (StartPrice - CurrentVal) / (1+r)^i
                 const oldResidueLoss = oldPrice - currentOldVal;
@@ -177,6 +197,7 @@ const TCOLogic = {
             mileage,
             fuelPrice,
             breakdownProb,
+            riskGrowth,
             repairPrice,
             overhaulInterval,
             inflation,
@@ -197,9 +218,8 @@ const TCOLogic = {
         // --- 1. Calculate TCO_old_NPV ---
         // Sum PV(OpEx) + PV(TermDepr)
 
-        // Base OpEx
-        const riskYear = (breakdownProb / 100) * repairPrice;
-        const oldBaseOpEx = oldMaint + oldTax + riskYear + ((mileage / 100) * oldCons * fuelPrice);
+        // Base OpEx without Risk (Nominal)
+        const oldBaseOpExNoRisk = oldMaint + oldTax + ((mileage / 100) * oldCons * fuelPrice);
 
         let sumPVOpExOld = 0;
 
@@ -209,6 +229,15 @@ const TCOLogic = {
             const inflFactor = Math.pow(1 + inflRate, i - 1);
             const discFactor = Math.pow(1 + discRate, i);
 
+            // Dynamic Risk Logic
+            let currentRiskProb = breakdownProb;
+            if (riskGrowth) {
+                // Growth 50% per year: base * (1.5)^(i-1)
+                currentRiskProb = breakdownProb * Math.pow(1.5, i - 1);
+                if (currentRiskProb > 100) currentRiskProb = 100;
+            }
+            const annualRiskCost = (currentRiskProb / 100) * repairPrice * inflFactor;
+
             // Overhauls
             const prevOdo = simOldOdo;
             simOldOdo += mileage;
@@ -216,7 +245,7 @@ const TCOLogic = {
             let overhaulCost = 0;
             if (repairs > 0) overhaulCost = repairs * repairPrice * inflFactor;
 
-            const nominalOpEx = (oldBaseOpEx * inflFactor) + overhaulCost;
+            const nominalOpEx = (oldBaseOpExNoRisk * inflFactor) + annualRiskCost + overhaulCost;
             sumPVOpExOld += nominalOpEx / discFactor;
         }
 
@@ -275,7 +304,7 @@ const TCOLogic = {
                 years,
                 mileage,
                 oldTCO: tcoOldNPV,
-                oldOpYear: oldBaseOpEx,
+                oldOpYear: oldBaseOpExNoRisk,
                 newOpYear: newBaseOpEx,
                 deprFactor: termDeprFactor,
                 targetMaint

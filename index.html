@@ -86,11 +86,23 @@
                     </div>
                 </div>
                 <div class="input-group">
-                    <label>Вероятность поломки</label>
+                    <label>Вероятность поломки в год (%)</label>
                     <div class="range-row">
-                        <input type="range" id="breakdown-prob" min="0" max="100" value="20" step="5">
-                        <span id="breakdown-prob-val">20%</span>
+                        <input type="range" id="breakdown-prob" min="0" max="100" value="50" step="5">
+                        <span id="breakdown-prob-val">50%</span>
                     </div>
+                </div>
+
+                <div class="input-group" style="display:flex; align-items:center; gap:0.5rem; margin-top:0.5rem;">
+                    <input type="checkbox" id="risk-growth" checked style="width:auto;">
+                    <label for="risk-growth" style="margin:0; cursor:pointer;">Риски растут с возрастом авто</label>
+                </div>
+
+                <div class="input-group" style="display:flex; align-items:center; gap:0.5rem; margin-top:0.25rem;">
+                    <input type="checkbox" id="risk-mileage" style="width:auto;">
+                    <label for="risk-mileage" style="margin:0; cursor:pointer;"
+                        title="Увеличивает вероятность поломки пропорционально общему пробегу (TÜV Report).">Риски
+                        зависят от пробега</label>
                 </div>
                 <div class="input-group">
                     <label>Цена кап.ремонта</label>
