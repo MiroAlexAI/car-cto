@@ -55,12 +55,13 @@ const TCOLogic = {
         const labels = [];
         const oldData = []; // Cumulative PV
         const newData = []; // Cumulative PV
-        const oldDeprData = []; // Asset Value (Nominal - for visual reference?) Usually Chart uses same scale. 
-        // Mixing Nominal Asset Value with NPV Costs is tricky visually.
-        // But "Residual Value" is usually Nominal.
-        const newDeprData = []; // Nominal Asset Value
-        const oldAnnualData = []; // Nominal Annual Spend
-        const newAnnualData = []; // Nominal Annual Spend
+
+        // Asset Values (Nominal)
+        const oldDeprData = [];
+        const newDeprData = [];
+
+        const oldAnnualData = []; // Nominal Annual Spend (OpEx + Overhaul)
+        const newAnnualData = []; // Nominal Annual Spend (OpEx + Overhaul)
 
         let cumOldPV = 0;
         let cumNewPV = 0;
@@ -72,19 +73,14 @@ const TCOLogic = {
         let oldOdometer = currentMileage;
         let overhaulCount = 0;
 
-        // Loop including Year 0
         for (let i = 0; i <= years; i++) {
             labels.push(`Год ${i}`);
 
             if (i === 0) {
-                // Year 0: Initial Start.
-                // Switch Cost = NewPrice - (OldPrice + Savings)
-                // This happens NOW (t=0), so PV = Nominal.
-                // For Old Car, cost is 0 (we already own it).
-
+                // Year 0
+                // Switch Cost
                 const switchCost = newPrice - (oldPrice + (savings || 0));
 
-                // Add to Cumulative PV
                 cumOldPV += 0;
                 cumNewPV += switchCost;
 
@@ -98,70 +94,63 @@ const TCOLogic = {
                 newAnnualData.push(switchCost);
             } else {
                 // Year > 0
-                // 1. Inflation Factor for OpEx
-                // We assume prices rise at straight inflation rate from base year
                 const inflFactor = Math.pow(1 + inflRate, i - 1);
-                // Using (i-1) if prices are set for Year 1 at start? 
-                // Standard: Year 1 costs are usually paid at end of year 1? 
-                // Or "Inflation per year". Let's assume OpEx inputs are "Today's prices".
-                // So Year 1 nominal = Base * (1+inf). Year 2 = Base * (1+inf)^2.
-                // The prompt says: OpEx_i = OpEx_base * (1 + inflation)^ (i-1).
-                // implying Year 1 uses Base prices? Or Year 1 is first inflated year?
-                // Formula: (i-1). So Year 1 = Base * 1. Year 2 = Base * (1+inf).
-                // Meaning inputs are "Average Year 1 prices". Okay.
                 const opExInflator = Math.pow(1 + inflRate, i - 1);
+                const discFactor = Math.pow(1 + discRate, i);
 
-                // 2. Overhaul Logic (Old Car)
+                // 1. Overhaul (Old Car)
                 const prevOdo = oldOdometer;
                 oldOdometer += mileage;
                 const repairsTriggered = Math.floor(oldOdometer / overhaulInterval) - Math.floor(prevOdo / overhaulInterval);
 
                 let nominalOverhaulCost = 0;
                 if (repairsTriggered > 0) {
-                    // Repair price also inflates
                     nominalOverhaulCost = repairsTriggered * repairPrice * opExInflator;
                     overhaulCount += repairsTriggered;
                 }
 
-                // 3. OpEx Nominal
+                // 2. OpEx Nominal (Fuel, Maint, Tax, Risk) + Overhaul
+                // Note: We do NOT add Depreciation here for TCO sum.
                 const nominalOldOpEx = (oldOpBase * opExInflator) + nominalOverhaulCost;
                 const nominalNewOpEx = (newOpBase * opExInflator);
 
-                // 4. Depreciation (Asset Loss)
-                const oldDeprLoss = currentOldVal * oldDeprRate;
-                currentOldVal -= oldDeprLoss;
+                // 3. Asset Value Updates (for Final Calculation)
+                currentOldVal = currentOldVal * (1 - oldDeprRate);
+                currentNewVal = currentNewVal * (1 - newDeprRate);
 
-                const newDeprLoss = currentNewVal * newDeprRate;
-                currentNewVal -= newDeprLoss;
+                // 4. PV of OpEx
+                const pvOldOpEx = nominalOldOpEx / discFactor;
+                const pvNewOpEx = nominalNewOpEx / discFactor;
 
-                // 5. Total Annual Loss (Nominal)
-                const annualOldLossNominal = nominalOldOpEx + oldDeprLoss;
-                const annualNewLossNominal = nominalNewOpEx + newDeprLoss;
+                // 5. Update Cumulative (OpEx Only)
+                cumOldPV += pvOldOpEx;
+                cumNewPV += pvNewOpEx;
 
-                // 6. Discounting to PV
-                // PV = Nominal / (1 + r)^i
-                const discountFactor = Math.pow(1 + discRate, i);
+                // 6. Calculate "TCO if sold this year" for the Chart
+                // We add the PV of the depreciation realized if we sell at year i.
+                // TermDepr = (StartPrice - CurrentVal) / (1+r)^i
+                const oldResidueLoss = oldPrice - currentOldVal;
+                const newResidueLoss = newPrice - currentNewVal;
 
-                const pvOldLoss = annualOldLossNominal / discountFactor;
-                const pvNewLoss = annualNewLossNominal / discountFactor;
+                const currentTermDeprOld = oldResidueLoss / discFactor;
+                const currentTermDeprNew = newResidueLoss / discFactor;
 
-                // 7. Update Cumulative
-                cumOldPV += pvOldLoss;
-                cumNewPV += pvNewLoss;
-
-                oldData.push(cumOldPV);
-                newData.push(cumNewPV);
+                // The Chart Point is Operational PV + Depreciation PV
+                oldData.push(cumOldPV + currentTermDeprOld);
+                newData.push(cumNewPV + currentTermDeprNew);
 
                 oldDeprData.push(currentOldVal);
                 newDeprData.push(currentNewVal);
 
-                // For bars, we show Nominal Spend (Cash Out + Asset Loss)
-                // Or just Cash Out? "Затраты за год". Usually implies Cashflow. 
-                // But previously we included Depr Loss in bars too. I'll stick to Total Loss Nominal.
-                oldAnnualData.push(annualOldLossNominal);
-                newAnnualData.push(annualNewLossNominal);
+                // Bars: Show Nominal OpEx
+                oldAnnualData.push(nominalOldOpEx);
+                newAnnualData.push(nominalNewOpEx);
             }
         }
+
+        // Final values from the array (which include the Terminal Depr jump)
+        const finalOld = oldData[years];
+        const finalNew = newData[years];
 
         return {
             labels,
@@ -171,10 +160,10 @@ const TCOLogic = {
             newDeprData,
             oldAnnualData,
             newAnnualData,
-            finalOld: cumOldPV,
-            finalNew: cumNewPV,
+            finalOld,
+            finalNew,
             overhaulCount,
-            diff: cumNewPV - cumOldPV
+            diff: finalNew - finalOld
         };
     },
 
@@ -197,7 +186,7 @@ const TCOLogic = {
             oldTax,
             oldPrice,
             oldDepr,
-            newDepr, // % Global setting for New Car Depreciation
+            newDepr, // %
             newPrice,
             savings
         } = data;
@@ -205,16 +194,17 @@ const TCOLogic = {
         const inflRate = (inflation || 0) / 100;
         const discRate = (discountRate || 0) / 100;
 
-        // --- 1. Calculate Accurate Old TCO (NPV Simulation) ---
-        let simOldVal = oldPrice;
-        let simOldOdo = 0;
-        let simOldPV = 0;
-        const oldDeprRate = oldDepr / 100;
+        // --- 1. Calculate TCO_old_NPV ---
+        // Sum PV(OpEx) + PV(TermDepr)
 
         // Base OpEx
         const riskYear = (breakdownProb / 100) * repairPrice;
         const oldBaseOpEx = oldMaint + oldTax + riskYear + ((mileage / 100) * oldCons * fuelPrice);
 
+        let sumPVOpExOld = 0;
+
+        // Simulation for Overhauls and OpEx
+        let simOldOdo = 0;
         for (let i = 1; i <= years; i++) {
             const inflFactor = Math.pow(1 + inflRate, i - 1);
             const discFactor = Math.pow(1 + discRate, i);
@@ -226,74 +216,52 @@ const TCOLogic = {
             let overhaulCost = 0;
             if (repairs > 0) overhaulCost = repairs * repairPrice * inflFactor;
 
-            // OpEx Nominal
             const nominalOpEx = (oldBaseOpEx * inflFactor) + overhaulCost;
-
-            // Depreciation
-            const deprLoss = simOldVal * oldDeprRate;
-            simOldVal -= deprLoss;
-
-            // Annual Total Loss Nominal
-            const annualLoss = nominalOpEx + deprLoss;
-
-            // Add PV
-            simOldPV += annualLoss / discFactor;
+            sumPVOpExOld += nominalOpEx / discFactor;
         }
 
-        // Note: In logic.js calculate(), we check (Price - EndVal) via DeprLoss sum or direct subtract?
-        // In the loop above, we summed "DeprLoss / DiscountFactor".
-        // This is mathematically "Sum of PV of annual value drops".
-        // This is correct for the logic "Loss of Wealth".
-        // The previous simple logic "Spend + (Start - End)" assumes no time value.
-        // With time value, we MUST sum discounted annual drops.
-        const targetNPV = simOldPV;
+        // Terminal Depr Old
+        // Value_end = Price * (1-d)^N
+        // TermDepr = (Price - Value) / (1+r)^N
+        const oldDeprRate = oldDepr / 100;
+        const oldEndVal = oldPrice * Math.pow(1 - oldDeprRate, years);
+        const termDeprPVOld = (oldPrice - oldEndVal) / Math.pow(1 + discRate, years);
+
+        const tcoOldNPV = sumPVOpExOld + termDeprPVOld;
 
 
-        // --- 2. Solve for Max Price (Target: NewNPV <= OldNPV) ---
-        // NewNPV = SwitchCost + PV_OpEx_New + PV_Depr_New
-        // SwitchCost = P - OldPrice - Savings
-        // PV_OpEx_New = Sum(OpEx_Base_New * Infl * Disc)
-        // PV_Depr_New = Sum(P * DeprCoeff * Disc) = P * Sum(...)
-
-        // Target Specs (Ideals)
+        // --- 2. Calculate New Target ---
+        // Target OpEx
         const targetCons = oldCons * 0.9;
         const targetMaint = oldMaint * 0.85;
         const targetTax = oldTax;
 
         const newBaseOpEx = ((mileage / 100) * targetCons * fuelPrice) + targetMaint + targetTax;
 
-        let sumPVOpEx = 0;
-        let sumPVDeprFactor = 0; // Sum of (DeprLoss_fraction / Disc)
-
-        const newDeprRate = newDepr / 100;
-        let currentAssetFraction = 1.0; // Starts at 1.0 * P
-
+        let sumPVOpExNew = 0;
         for (let i = 1; i <= years; i++) {
             const inflFactor = Math.pow(1 + inflRate, i - 1);
             const discFactor = Math.pow(1 + discRate, i);
-
-            // OpEx PV
             const nominalOpEx = newBaseOpEx * inflFactor;
-            sumPVOpEx += nominalOpEx / discFactor;
-
-            // Depreciation PV Factor
-            // Loss = Val_{i-1} * rate
-            // Val_{i-1} = P * currentAssetFraction
-            const lossFraction = currentAssetFraction * newDeprRate;
-            sumPVDeprFactor += lossFraction / discFactor;
-
-            // Update Asset Fraction
-            currentAssetFraction -= lossFraction;
+            sumPVOpExNew += nominalOpEx / discFactor;
         }
 
-        // Equation:
-        // TargetNPV >= (P - (OldPrice + Savings)) + sumPVOpEx + P * sumPVDeprFactor
-        // TargetNPV + OldPrice + Savings - sumPVOpEx >= P * (1 + sumPVDeprFactor)
-        // P <= (TargetNPV + OldPrice + Savings - sumPVOpEx) / (1 + sumPVDeprFactor)
+        // --- 3. Solve for Price Max ---
+        // Formula: P = (TCO_Old + Offset - PV_OpEx_New) / (1 + TermDeprFactor)
+        // Offset = OldPrice + Savings
+        // TermDeprFactor = (1 - (1-dNew)^N) / (1+r)^N
 
-        const offset = (oldPrice + (savings || 0));
-        const numerator = targetNPV + offset - sumPVOpEx;
-        const denominator = 1 + sumPVDeprFactor;
+        const newDeprRate = newDepr / 100;
+        const newDecay = Math.pow(1 - newDeprRate, years); // (1-d)^N
+        const totalDropPct = 1 - newDecay; // (1 - (1-d)^N)
+        const finalDisc = Math.pow(1 + discRate, years);
+
+        const termDeprFactor = totalDropPct / finalDisc;
+
+        const offset = oldPrice + (savings || 0);
+
+        const numerator = tcoOldNPV + offset - sumPVOpExNew;
+        const denominator = 1 + termDeprFactor;
 
         let recPrice = 0;
         if (numerator > 0) {
@@ -306,10 +274,10 @@ const TCOLogic = {
             params: {
                 years,
                 mileage,
-                oldTCO: targetNPV,
+                oldTCO: tcoOldNPV,
                 oldOpYear: oldBaseOpEx,
                 newOpYear: newBaseOpEx,
-                deprFactor: sumPVDeprFactor, // rough indicator
+                deprFactor: termDeprFactor,
                 targetMaint
             }
         };
