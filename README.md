@@ -25,7 +25,8 @@
 
 Вы можете развернуть этот проект в один клик:
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fyour-username%2Fcar-tco-calculator)
+
+https://car-cto-wz85.vercel.app/
 
 ## 🛠 Технологии
 - **HTML5 / CSS3** (Vanilla, CSS Variables)
