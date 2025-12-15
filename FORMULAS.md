@@ -13,38 +13,40 @@
 Расчитываются ежегодно. Все базовые цены ($P_{fuel}$, $Price_{repair}$, $Maint$) индексируются на инфляцию.
 
 ### Инфляционный коэффициент для года $i$:
+
 $$
 Factor_{infl} = (1 + \frac{Inf}{100})^{i-1}
 $$
 
 ### Базовые расходы (Номинальные):
-*   **Топливо**:
-    $$
-    Cost_{fuel} = \frac{M}{100} \times Cons \times P_{fuel} \times Factor_{infl}
-    $$
+*   **Топливо**: $Cost_{fuel} = \frac{M}{100} \times Cons \times P_{fuel} \times Factor_{infl}$
 *   **Обслуживание и Налог**: Тоже умножаются на $Factor_{infl}$.
 
 ### Динамические Риски (Только для старого авто):
 Вероятность поломки $Prob_i$ зависит от возраста и пробега.
 
 1.  **Рост от возраста** (если включено):
+    
     $$
     Prob_{age} = Prob_{base} \times 1.5^{i-1}
     $$
     *(Риск растет на 50% каждый год)*
 
 2.  **Рост от пробега** (если включено):
+    
     $$
     Factor_{mileage} = 1 + 0.2 \times \frac{Odo_{current}}{100000}
     $$
     *(Риск растет на 20% каждые 100 тыс. км)*
 
 **Итоговая вероятность (max 100%):**
+
 $$
 Prob_{i} = \min(100, Prob_{age} \times Factor_{mileage})
 $$
 
 **Стоимость рисков:**
+
 $$
 Cost_{risk,i} = \frac{Prob_i}{100} \times Price_{repair} \times Factor_{infl}
 $$
@@ -54,6 +56,7 @@ $$
 ## 3. Расчет TCO (NPV)
 
 ### 1. Цена переключения (Switch Cost, Год 0)
+
 $$
 Cost_{switch} = Price_{new} - (Price_{old} + Savings)
 $$
@@ -61,25 +64,30 @@ $$
 
 ### 2. Дисконтированные операционные расходы (PV OpEx)
 Для каждого года $i$ расходы приводятся к ценам Года 0:
+
 $$
 PV(OpEx_i) = \frac{OpEx_{nominal, i}}{(1 + \frac{r}{100})^i}
 $$
 
 ### 3. Терминальная амортизация (Terminal Depreciation)
 Убыток от потери стоимости автомобиля считается в момент продажи (конец владения).
+
 $$
 Value_{end} = Price_{start} \times (1 - \frac{Rate_{depr}}{100})^N
 $$
+
 $$
 Loss_{depr} = Price_{start} - Value_{end}
 $$
 
 Этот убыток также дисконтируется:
+
 $$
 PV(Depr) = \frac{Loss_{depr}}{(1 + \frac{r}{100})^N}
 $$
 
 ### Итоговая формула TCO:
+
 $$
 TCO = Cost_{switch} + \sum_{i=1}^{N} PV(OpEx_i) + PV(Depr)
 $$
@@ -90,6 +98,7 @@ $$
 Алгоритм ищет максимальную цену нового авто ($P_{max}$), при которой $TCO_{new} \le TCO_{old}$.
 
 **Уравнение баланса:**
+
 $$
 TCO_{old} + Cost_{switch\_offset} \ge PV(OpEx_{new}) + P_{max} \times Factor_{depr}
 $$
@@ -98,11 +107,13 @@ $$
 *   $TCO_{old}$: Рассчитанный NPV старого авто (с учетом растущих рисков).
 *   $PV(OpEx_{new})$: Сумма дисконтированных расходов идеального нового авто.
 *   $Factor_{depr}$: Коэффициент дисконтированной потери стоимости части цены авто.
-    $$
-    Factor_{depr} = \frac{1 - (1 - d_{new})^N}{(1 + r)^N}
-    $$
+
+$$
+Factor_{depr} = \frac{1 - (1 - d_{new})^N}{(1 + r)^N}
+$$
 
 **Решение:**
+
 $$
 P_{max} = \frac{TCO_{old} + Price_{old} + Savings - PV(OpEx_{new})}{1 + Factor_{depr}}
 $$
