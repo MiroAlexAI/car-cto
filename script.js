@@ -24,6 +24,9 @@ const inputs = {
     newConsumption: document.getElementById('new-consumption'),
     newMaintenance: document.getElementById('new-maintenance'),
     newTax: document.getElementById('new-tax'),
+    // Finance
+    inflation: document.getElementById('inflation'),
+    discountRate: document.getElementById('discount-rate'),
 };
 
 const displays = {
@@ -49,6 +52,8 @@ const displays = {
 
     oldDepr: document.getElementById('old-depr-val'),
     newDepr: document.getElementById('new-depr-val'),
+    inflation: document.getElementById('inflation-val'),
+    discountRate: document.getElementById('discount-rate-val'),
 
     // Results in UI
     resYears: document.getElementById('res-years'),
@@ -122,6 +127,8 @@ function updateDisplays() {
 
     if (displays.oldDepr) displays.oldDepr.textContent = inputs.oldDepr.value + '%';
     if (displays.newDepr) displays.newDepr.textContent = inputs.newDepr.value + '%';
+    if (displays.inflation) displays.inflation.textContent = inputs.inflation.value + '%';
+    if (displays.discountRate) displays.discountRate.textContent = inputs.discountRate.value + '%';
 
     if (displays.resYears) displays.resYears.textContent = inputs.years.value;
 }
@@ -172,6 +179,8 @@ function getInputs() {
         newMaint: parseInt(inputs.newMaintenance.value),
         newTax: parseInt(inputs.newTax.value),
         newDepr: parseFloat(inputs.newDepr.value),
+        inflation: parseFloat(inputs.inflation.value),
+        discountRate: parseFloat(inputs.discountRate.value)
     };
 }
 

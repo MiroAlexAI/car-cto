@@ -176,6 +176,24 @@
                     </div>
                 </div>
 
+                <div class="input-group">
+                    <label title="Ежегодный рост цен на топливо, запчасти и услуги (OpEx).">Инфляция (% в год)</label>
+                    <div class="range-row">
+                        <input type="range" id="inflation" min="0" max="30" step="1" value="10">
+                        <span id="inflation-val">10%</span>
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <label
+                        title="Ставка дисконтирования. Отражает стоимость денег во времени (альтернативная доходность). Используется для расчета NPV.">Дисконтная
+                        ставка (%)</label>
+                    <div class="range-row">
+                        <input type="range" id="discount-rate" min="0" max="30" step="1" value="15">
+                        <span id="discount-rate-val">15%</span>
+                    </div>
+                </div>
+
                 <div class="opt-section">
                     <button id="optimize-btn" class="btn-primary" title="Подбирает цену покупки нового авто, при которой совокупные потери (TCO) сравняются с текущим авто.
 Алгоритм предполагает покупку более совершенного авто:
