@@ -43,6 +43,7 @@ const displays = {
     overhaulInt: document.getElementById('overhaul-interval-val'),
     breakdownProb: document.getElementById('breakdown-prob-val'),
     repairCost: document.getElementById('repair-cost-val'),
+    currentMileage: document.getElementById('current-mileage-val'),
 
     newPrice: document.getElementById('new-price-val'),
     newCons: document.getElementById('new-consumption-val'),
@@ -71,9 +72,23 @@ const displays = {
     optText: document.getElementById('opt-text'),
     optPrice: document.getElementById('opt-price'),
     optCons: document.getElementById('opt-cons'),
+
+    // Modal
+    saveModal: document.getElementById('save-modal'),
+    reportContent: document.getElementById('modal-report-content'),
+
+    // AI Panel
+    aiPromptText: document.getElementById('ai-prompt-text'),
 };
 
-const optimizeBtn = document.getElementById('optimize-btn');
+const buttons = {
+    optimize: document.getElementById('optimize-btn'),
+    save: document.getElementById('save-btn'),
+    closeModal: document.querySelector('.close-modal'),
+    printReport: document.getElementById('print-report'),
+    copyReport: document.getElementById('copy-report'),
+    openQwen: document.getElementById('open-qwen-btn'),
+};
 
 let chart = null;
 
@@ -86,25 +101,50 @@ function init() {
                 updateDisplays();
                 calculate();
                 hideOptimization();
+                generateAIPrompt();
             });
         }
     });
 
-    if (optimizeBtn) {
-        optimizeBtn.addEventListener('click', optimize);
+    if (buttons.optimize) {
+        buttons.optimize.addEventListener('click', optimize);
+    }
+
+    if (buttons.save) {
+        buttons.save.addEventListener('click', openReport);
+    }
+
+    if (buttons.closeModal) {
+        buttons.closeModal.addEventListener('click', () => displays.saveModal.classList.add('hidden'));
+    }
+
+    if (buttons.printReport) {
+        buttons.printReport.addEventListener('click', () => window.print());
+    }
+
+    if (buttons.copyReport) {
+        buttons.copyReport.addEventListener('click', copyReportToClipboard);
+    }
+
+    if (buttons.openQwen) {
+        buttons.openQwen.addEventListener('click', openQwen);
+    }
+
+    // Close on overlay click
+    if (displays.saveModal) {
+        displays.saveModal.addEventListener('click', (e) => {
+            if (e.target === displays.saveModal) displays.saveModal.classList.add('hidden');
+        });
     }
 
     // Specific event listeners for elements that trigger calculate on 'change' or need special handling
-    if (inputs.riskGrowth) {
-        inputs.riskGrowth.addEventListener('change', calculate);
-    }
-    if (inputs.riskMileage) {
-        inputs.riskMileage.addEventListener('change', calculate);
-    }
+    if (inputs.riskGrowth) inputs.riskGrowth.addEventListener('change', () => { calculate(); generateAIPrompt(); });
+    if (inputs.riskMileage) inputs.riskMileage.addEventListener('change', () => { calculate(); generateAIPrompt(); });
 
     // Initial calcs
     updateDisplays();
     calculate();
+    generateAIPrompt();
 }
 
 function updateDisplays() {
@@ -140,6 +180,7 @@ function updateDisplays() {
     if (displays.newDepr) displays.newDepr.textContent = inputs.newDepr.value + '%';
     if (displays.inflation) displays.inflation.textContent = inputs.inflation.value + '%';
     if (displays.discountRate) displays.discountRate.textContent = inputs.discountRate.value + '%';
+    if (displays.currentMileage) displays.currentMileage.textContent = fmt(inputs.currentMileage.value);
 
     if (displays.resYears) displays.resYears.textContent = inputs.years.value;
 }
@@ -156,17 +197,7 @@ function getInputs() {
     const years = parseInt(inputs.years.value);
     const mileage = parseInt(inputs.mileage.value);
     const fuelPrice = parseFloat(inputs.fuelPrice.value);
-
-    // Safety checks for elements that might be missing
-    // Current Mileage removed, default to 0 (Calculation is relative to NOW)
-    const startOdometer = 0;
-
-    // Logic: overhaul interval is distance from *now*, or absolute?
-    // If user inputs "250k" for interval. And starts at 0 (relative).
-    // Break happens in 250k km.
-    // If they meant "250k on odometer", and car has 180k. Break is in 70k.
-    // By removing "current mileage", we force the semantic "Distance until overhaul".
-    // Which is actually simpler for the average user ("Repair coming in 50k").
+    const startOdometer = parseInt(inputs.currentMileage.value) || 0;
     const overhaulInterval = parseInt(inputs.overhaulInterval.value);
 
     return {
@@ -198,20 +229,14 @@ function getInputs() {
 }
 
 function calculate() {
-    if (typeof TCOLogic === 'undefined') {
-        console.error('TCOLogic not loaded');
-        return;
-    }
+    if (typeof TCOLogic === 'undefined') return;
 
     const data = getInputs();
     const result = TCOLogic.calculate(data);
 
-    // Update UI Elements
     displays.oldTotalCost.textContent = formatMoney(result.finalOld);
     displays.newTotalCost.textContent = formatMoney(result.finalNew);
 
-    // Upgrade Cost (Cash required)
-    // NewPrice - (OldPrice + Savings)
     const cashRequired = data.newPrice - (data.oldPrice + data.savings);
     displays.upgradeCost.textContent = formatMoney(cashRequired);
 
@@ -231,71 +256,177 @@ function calculate() {
 
     updateChart(result);
 
-    // Update Risk UI Text
     const riskLabel = document.querySelector('.sub-title');
     if (riskLabel) riskLabel.textContent = `Риски (Капремонтов: ${result.overhaulCount})`;
 }
 
 function optimize() {
     const data = getInputs();
-
-    // Check if module is loaded
-    if (typeof TCOLogic === 'undefined') {
-        console.error('TCOLogic not loaded for optimization');
-        return;
-    }
+    if (typeof TCOLogic === 'undefined') return;
 
     const res = TCOLogic.optimize(data);
-    const { years } = data;
-
-    // Display
     displays.optResult.style.display = 'block';
 
-    if (res.recPrice > 0) {
-        displays.optPrice.textContent = formatMoney(res.recPrice);
-    } else {
-        displays.optPrice.textContent = "Невозможно (Слишком дорого)";
-    }
+    displays.optPrice.textContent = res.recPrice > 0 ? formatMoney(res.recPrice) : "Невозможно";
+    displays.optCons.textContent = res.recCons > 0 ? res.recCons.toFixed(1) + " л/100км" : "0 л";
 
-    if (res.recCons > 0) {
-        displays.optCons.textContent = res.recCons.toFixed(1) + " л/100км";
-    } else {
-        displays.optCons.textContent = "0 л";
-    }
-
-    // Concise Summary parameters
     const summaryHtml = `
         <span style="font-size:0.85em; color:var(--text-secondary); display:block; margin-top:0.5rem; border-top:1px solid #dfe7ef; padding-top:0.5rem">
           <strong>Условия "Идеального Нового":</strong><br>
           • Риски поломок: 0%<br>
-          • Расход топлива: ${p.newOpYear ? (inputs.oldConsumption.value * 0.9).toFixed(1) : '-'} л/100км (-10%)<br>
+          • Расход топлива: ${res.recCons.toFixed(1)} л/100км (-10%)<br>
           • Обслуживание: -15% от старого<br>
           • Амортизация: ${inputs.newDepr.value}% в год
         </span>
     `;
-
     displays.optText.innerHTML = `Если новый авто будет надежнее и экономичнее:` + summaryHtml;
-
-    // Scroll to it
     displays.optResult.scrollIntoView({ behavior: 'smooth' });
+}
+
+function generateAIPrompt() {
+    const data = getInputs();
+    const result = TCOLogic.calculate(data);
+    const money = (num) => formatMoney(num);
+    const fmt = (num) => new Intl.NumberFormat('ru-RU').format(num);
+
+    const prompt = `Ты — эксперт по ТОиР и финансовый аналитик. Проанализируй данные моего расчета TCO (Total Cost of Ownership) за ${data.years} лет.
+    
+ТЕКУЩИЙ АВТО:
+- Цена: ${money(data.oldPrice)}
+- Пробег: ${fmt(data.currentMileage)} км
+- Расход: ${data.oldCons} л/100км
+- Риск поломки: ${data.breakdownProb}% в год
+- Затраты на ремонт/год: ${money(data.oldMaint)}
+- Капремонт каждые: ${fmt(data.overhaulInterval)} км
+
+НОВЫЙ АВТО:
+- Цена: ${money(data.newPrice)}
+- Расход: ${data.newCons} л/100км
+- ТО/год: ${money(data.newMaint + data.newTax)}
+
+УСЛОВИЯ:
+- Пробег в год: ${fmt(data.mileage)} км
+- Инфляция: ${data.inflation}%
+- Ставка дисконта (NPV): ${data.discountRate}%
+
+РЕЗУЛЬТАТ КАЛЬКУЛЯТОРА:
+- TCO Старого: ${money(result.finalOld)}
+- TCO Нового: ${money(result.finalNew)}
+- Разница: ${money(Math.abs(result.diff))} (${result.diff < 0 ? 'экономия' : 'переплата'})
+
+ЗАДАНИЕ:
+1. Оцени адекватность расчета с точки зрения инженера по надежности.
+2. Какие скрытые риски я могу не учитывать?
+3. Дай совет: стоит ли менять авто сейчас, учитывая текущие экономические тренды?`;
+
+    displays.aiPromptText.value = prompt;
+}
+
+function openQwen() {
+    // Copy to clipboard first
+    const text = displays.aiPromptText.value;
+    navigator.clipboard.writeText(text).then(() => {
+        const btn = buttons.openQwen;
+        const originalText = btn.textContent;
+        btn.textContent = '✅ Скопировано! Открываю...';
+        setTimeout(() => {
+            btn.textContent = originalText;
+            window.open('https://chat.qwen.ai/', '_blank');
+        }, 1500);
+    });
+}
+
+function openReport() {
+    const data = getInputs();
+    const result = TCOLogic.calculate(data);
+    const opt = TCOLogic.optimize(data);
+    const fmt = (num) => new Intl.NumberFormat('ru-RU').format(num);
+    const money = (num) => formatMoney(num);
+
+    const reportHtml = `
+        <div class="report-section">
+            <h3>🚗 Текущий автомобиль</h3>
+            <div class="report-grid">
+                <div class="report-item"><span class="label">Рыночная цена:</span><span class="value">${money(data.oldPrice)}</span></div>
+                <div class="report-item"><span class="label">Накопления/Долг:</span><span class="value">${money(data.savings)}</span></div>
+                <div class="report-item"><span class="label">Расход (л/100км):</span><span class="value">${data.oldCons}</span></div>
+                <div class="report-item"><span class="label">Ремонт/год:</span><span class="value">${money(data.oldMaint)}</span></div>
+                <div class="report-item"><span class="label">Вероятность поломки:</span><span class="value">${data.breakdownProb}%</span></div>
+                <div class="report-item"><span class="label">Текущий пробег:</span><span class="value">${fmt(data.currentMileage)} км</span></div>
+                <div class="report-item"><span class="label">Ресурс (капремонт):</span><span class="value">${fmt(data.overhaulInterval)} км</span></div>
+            </div>
+        </div>
+
+        <div class="report-section">
+            <h3>✨ Новый автомобиль (Желаемый)</h3>
+            <div class="report-grid">
+                <div class="report-item"><span class="label">Цена покупки:</span><span class="value">${money(data.newPrice)}</span></div>
+                <div class="report-item"><span class="label">Расход (л/100км):</span><span class="value">${data.newCons}</span></div>
+                <div class="report-item"><span class="label">ТО/год (+КАСКО):</span><span class="value">${money(data.newMaint + data.newTax)}</span></div>
+            </div>
+        </div>
+
+        <div class="report-section">
+            <h3>⚙️ Условия расчета</h3>
+            <div class="report-grid">
+                <div class="report-item"><span class="label">Срок владения:</span><span class="value">${data.years} лет</span></div>
+                <div class="report-item"><span class="label">Пробег в год:</span><span class="value">${fmt(data.mileage)} км</span></div>
+                <div class="report-item"><span class="label">Инфляция:</span><span class="value">${data.inflation}%</span></div>
+                <div class="report-item"><span class="label">Дисконт (NPV):</span><span class="value">${data.discountRate}%</span></div>
+            </div>
+        </div>
+
+        <div class="report-section">
+            <h3>📊 Результаты (NPV за ${data.years} лет)</h3>
+            <div class="report-grid">
+                <div class="report-item"><span class="label">Итого затрат (Старый):</span><span class="value">${money(result.finalOld)}</span></div>
+                <div class="report-item"><span class="label">Итого затрат (Новый):</span><span class="value">${money(result.finalNew)}</span></div>
+            </div>
+            <div class="report-summary ${result.diff < 0 ? 'success' : 'danger'}">
+                <strong>Вердикт:</strong> ${result.diff < 0 ? 'Покупка экономически выгодна.' : 'Покупка невыгодна, лучше оставить текущий авто.'}<br>
+                Разница в затратах: <strong>${money(Math.abs(result.diff))}</strong> 
+                (${result.diff < 0 ? 'экономия' : 'переплата'} за весь срок).
+            </div>
+        </div>
+
+        <div class="report-section">
+            <h3>💡 Рекомендации от Prostoev.NET</h3>
+            <p style="font-size: 0.9em; margin-bottom: 1rem;">
+                Для того чтобы замена автомобиля стала экономически целесообразной (TCO сравнялось), вам следует искать:
+            </p>
+            <div class="report-grid">
+                <div class="report-item"><span class="label">Макс. цена покупки:</span><span class="value">${money(opt.recPrice)}</span></div>
+                <div class="report-item"><span class="label">Целевой расход топлива:</span><span class="value">не более ${opt.recCons.toFixed(1)} л/100км</span></div>
+                <div class="report-item"><span class="label">Затраты на ТО/год:</span><span class="value">до ${money(opt.params.targetMaint)}</span></div>
+            </div>
+        </div>
+    `;
+
+    displays.reportContent.innerHTML = reportHtml;
+    displays.saveModal.classList.remove('hidden');
+}
+
+function copyReportToClipboard() {
+    const text = displays.reportContent.innerText;
+    navigator.clipboard.writeText(text).then(() => {
+        const btn = buttons.copyReport;
+        const originalText = btn.textContent;
+        btn.textContent = '✅ Скопировано!';
+        btn.style.backgroundColor = '#dcfce7';
+        setTimeout(() => {
+            btn.textContent = originalText;
+            btn.style.backgroundColor = '';
+        }, 2000);
+    });
 }
 
 function updateChart(result) {
     const ctx = document.getElementById('costChart').getContext('2d');
     const { labels, oldData, newData, oldDeprData, newDeprData, finalOld, finalNew, oldAnnualData, newAnnualData } = result;
 
-    if (chart) {
-        chart.destroy();
-    }
+    if (chart) chart.destroy();
+    if (typeof Chart === 'undefined') return;
 
-    if (typeof Chart === 'undefined') {
-        console.error('Chart.js library is not loaded');
-        return;
-    }
-
-    // Prepare legend strings with Totals
-    const oldLabel = `Старый (TCO Накопительно: ${formatMoney(finalOld)})`;
-    const newLabel = `Новый (TCO Накопительно: ${formatMoney(finalNew)})`;
     const diffVal = finalNew - finalOld;
     const diffLabel = `Разница TCO: ${formatMoney(diffVal)} ${diffVal > 0 ? '(Дороже)' : '(Дешевле)'}`;
 
@@ -305,70 +436,59 @@ function updateChart(result) {
             labels: labels,
             datasets: [
                 {
-                    label: oldLabel,
+                    label: `Старый (TCO: ${formatMoney(finalOld)})`,
                     data: oldData,
-                    borderColor: '#ef4444', // Red
+                    borderColor: '#ef4444',
                     backgroundColor: 'rgba(239, 68, 68, 0.05)',
                     borderWidth: 2,
                     pointRadius: 0,
-                    pointHoverRadius: 4,
                     tension: 0.4,
                     fill: true,
                     yAxisID: 'y'
                 },
                 {
-                    label: newLabel,
+                    label: `Новый (TCO: ${formatMoney(finalNew)})`,
                     data: newData,
-                    borderColor: '#0ea5e9', // Sky Blue
+                    borderColor: '#0ea5e9',
                     backgroundColor: 'rgba(14, 165, 233, 0.05)',
                     borderWidth: 2,
                     pointRadius: 0,
-                    pointHoverRadius: 4,
                     tension: 0.4,
                     fill: true,
                     yAxisID: 'y'
                 },
                 {
-                    label: 'Старый (Остаточная стоимость)',
+                    label: 'Старый (Остаточная)',
                     data: oldDeprData,
-                    borderColor: '#fca5a5', // Lighter red
+                    borderColor: '#fca5a5',
                     borderDash: [5, 5],
-                    backgroundColor: 'transparent',
                     borderWidth: 1.5,
                     pointRadius: 0,
                     tension: 0.4,
-                    fill: false,
                     yAxisID: 'y'
                 },
                 {
-                    label: 'Новый (Остаточная стоимость)',
+                    label: 'Новый (Остаточная)',
                     data: newDeprData,
-                    borderColor: '#7dd3fc', // Lighter blue
+                    borderColor: '#7dd3fc',
                     borderDash: [5, 5],
-                    backgroundColor: 'transparent',
                     borderWidth: 1.5,
                     pointRadius: 0,
                     tension: 0.4,
-                    fill: false,
                     yAxisID: 'y'
                 },
-                // Bar Charts for Annual Costs
                 {
                     type: 'bar',
-                    label: 'Старый (Затраты в год)',
+                    label: 'Старый (В год)',
                     data: oldAnnualData,
                     backgroundColor: 'rgba(239, 68, 68, 0.3)',
-                    borderColor: 'rgba(239, 68, 68, 0.5)',
-                    borderWidth: 1,
                     yAxisID: 'y1'
                 },
                 {
                     type: 'bar',
-                    label: 'Новый (Затраты в год)',
+                    label: 'Новый (В год)',
                     data: newAnnualData,
                     backgroundColor: 'rgba(14, 165, 233, 0.3)',
-                    borderColor: 'rgba(14, 165, 233, 0.5)',
-                    borderWidth: 1,
                     yAxisID: 'y1'
                 }
             ]
@@ -377,91 +497,23 @@ function updateChart(result) {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-                title: {
-                    display: true,
-                    text: [
-                        'Сравнение совокупной стоимости владения (TCO)',
-                        diffLabel
-                    ],
-                    font: {
-                        size: 14,
-                        family: 'Inter'
-                    },
-                    color: '#64748b',
-                    padding: { bottom: 20 }
-                },
-                legend: {
-                    align: 'center',
-                    labels: {
-                        color: '#64748b',
-                        font: { family: 'Inter', size: 11 },
-                        usePointStyle: false, // Changed to false to show line styles
-                        boxWidth: 20 // Wider box to show dashes
-                    }
-                },
+                title: { display: true, text: ['Сравнение TCO', diffLabel], font: { size: 14, family: 'Inter' } },
+                legend: { labels: { color: '#64748b', font: { family: 'Inter', size: 10 }, boxWidth: 15 } },
                 tooltip: {
-                    backgroundColor: '#1e293b',
-                    titleColor: '#f8fafc',
-                    bodyColor: '#f8fafc',
-                    padding: 10,
-                    cornerRadius: 4,
-                    // displayColors: false, // Turn on to see bar vs line colors
+                    mode: 'index',
+                    intersect: false,
                     callbacks: {
-                        label: function (context) {
-                            let label = context.dataset.label || '';
-                            if (label.includes('(')) {
-                                label = label.split('(')[0].trim();
-                            }
-                            if (label) {
-                                label += ': ';
-                            }
-                            if (context.parsed.y !== null) {
-                                label += new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 }).format(context.parsed.y);
-                            }
-                            return label;
-                        }
+                        label: (ctx) => `${ctx.dataset.label.split('(')[0].trim()}: ${formatMoney(ctx.parsed.y)}`
                     }
                 }
             },
             scales: {
-                y: {
-                    type: 'linear',
-                    display: true,
-                    position: 'left',
-                    title: {
-                        display: true,
-                        text: 'Накопительно (Руб)',
-                        font: { size: 10 }
-                    },
-                    grid: { color: '#e2e8f0', drawBorder: false },
-                    ticks: { color: '#94a3b8', font: { family: 'Inter', size: 10 } }
-                },
-                y1: {
-                    type: 'linear',
-                    display: true,
-                    position: 'right',
-                    title: {
-                        display: true,
-                        text: 'Затраты за год (Руб)',
-                        font: { size: 10 }
-                    },
-                    grid: {
-                        drawOnChartArea: false // only want the grid lines for one axis to show up
-                    },
-                    ticks: { color: '#94a3b8', font: { family: 'Inter', size: 10 } }
-                },
-                x: {
-                    grid: { display: false },
-                    ticks: { color: '#94a3b8', font: { family: 'Inter', size: 10 } }
-                }
-            },
-            interaction: {
-                intersect: false,
-                mode: 'index',
+                y: { type: 'linear', position: 'left', ticks: { font: { size: 9 } } },
+                y1: { type: 'linear', position: 'right', grid: { drawOnChartArea: false }, ticks: { font: { size: 9 } } },
+                x: { ticks: { font: { size: 9 } } }
             }
         }
     });
 }
 
-// Start
 init();

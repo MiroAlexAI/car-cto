@@ -1,7 +1,7 @@
 {
   "name": "car-tco-calculator",
   "version": "1.0.0",
-  "description": "TCO Calculator for Cars",
+  "description": "TCO Calculator for Cars by Prostoev.NET",
   "main": "script.js",
   "scripts": {
     "test": "node tests/node-test.js"

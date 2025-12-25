@@ -4,20 +4,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TCO Калькулятор - Сравнение стоимости владения авто</title>
+    <title>TCO Калькулятор от Prostoev.NET - Сравнение стоимости владения авто</title>
     <meta name="description"
         content="Калькулятор совокупной стоимости владения автомобилем (TCO). Сравните расходы на текущий и новый автомобиль: топливо, обслуживание, амортизация и риски поломок.">
 
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website">
-    <meta property="og:title" content="TCO Калькулятор - Считать выгодно">
+    <meta property="og:title" content="TCO Калькулятор от Prostoev.NET - Считать выгодно">
     <meta property="og:description"
         content="Узнайте реальную стоимость владения вашим авто и сравните с покупкой нового. Учет амортизации, ремонтов и топлива.">
     <meta property="og:image" content="https://placehold.co/1200x630/2563eb/ffffff?text=AutoTCO+Calculator">
 
     <!-- Twitter -->
     <meta property="twitter:card" content="summary_large_image">
-    <meta property="twitter:title" content="TCO Калькулятор - Сравнение авто">
+    <meta property="twitter:title" content="TCO Калькулятор от Prostoev.NET - Сравнение авто">
     <meta property="twitter:description"
         content="Калькулятор стоимости владения автомобилем. Стоит ли менять старое авто на новое?">
     <meta property="twitter:image" content="https://placehold.co/1200x630/2563eb/ffffff?text=AutoTCO+Calculator">
@@ -34,7 +34,7 @@
         <!-- Header Panel -->
         <header class="header">
             <div class="logo">AutoTCO</div>
-            <h1>Калькулятор стоимости владения</h1>
+            <h1>Калькулятор стоимости владения от Prostoev.NET</h1>
         </header>
 
         <!-- Column 1: Current Car -->
@@ -78,6 +78,13 @@
                 </div>
 
                 <h3 class="sub-title">Риски (Старый)</h3>
+                <div class="input-group">
+                    <label>Текущий пробег (км)</label>
+                    <div class="range-row">
+                        <input type="range" id="current-mileage" min="0" max="400000" step="5000" value="120000">
+                        <span id="current-mileage-val">120 000</span>
+                    </div>
+                </div>
                 <div class="input-group">
                     <label>Ресурс до кап.ремонта (км)</label>
                     <div class="range-row">
@@ -232,7 +239,11 @@
                     <div class="label">Разница (<span id="res-years">5</span> лет)</div>
                     <div class="diff-value" id="total-diff">0 ₽</div>
                 </div>
-                <div id="recommendation" class="badge">...</div>
+                <div class="header-actions">
+                    <div id="recommendation" class="badge">...</div>
+                    <button id="save-btn" class="btn-secondary mini" title="Сохранить результаты в отчет">💾
+                        Сохранить</button>
+                </div>
             </div>
 
             <div class="chart-wrapper">
@@ -253,8 +264,55 @@
                     <strong id="upgrade-cost">0</strong>
                 </div>
             </div>
-        </section>
+            <!-- Column 5: AI Consultant -->
+            <section class="panel col-ai">
+                <h2 class="panel-title">🤖 AI Консультант</h2>
+                <div class="ai-window-header">
+                    <div class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+                    <div class="url-bar">chat.qwen.ai</div>
+                </div>
+                <div class="scroll-area">
+                    <p class="opt-desc" style="margin-bottom: 1rem;">
+                        Скопируйте подготовленный запрос и вставьте его в чат Qwen для получения глубокой аналитики.
+                    </p>
+
+                    <div class="input-group">
+                        <label>Ваш промпт для Qwen</label>
+                        <textarea id="ai-prompt-text" readonly class="ai-textarea"></textarea>
+                    </div>
+
+                    <button id="open-qwen-btn" class="btn-primary" style="background: #624aff;">
+                        🚀 Открыть Qwen AI
+                    </button>
+
+                    <div class="ai-info-box">
+                        <h4>Что спросить у AI?</h4>
+                        <ul>
+                            <li>Анализ скрытых рисков</li>
+                            <li>Оценка рыночных трендов</li>
+                            <li>Совет по выбору модели</li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
     </div>
+    <!-- Save Modal -->
+    <div id="save-modal" class="modal-overlay hidden">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>📈 Детальный отчет TCO</h2>
+                <button class="close-modal">&times;</button>
+            </div>
+            <div class="modal-body" id="modal-report-content">
+                <!-- Content will be injected by JS -->
+            </div>
+            <div class="modal-footer">
+                <button id="print-report" class="btn-primary">🖨️ Печать / PDF</button>
+                <button id="copy-report" class="btn-secondary">📋 Копировать текст</button>
+            </div>
+        </div>
+    </div>
+
     <script src="logic.js"></script>
     <script src="script.js"></script>
 </body>
